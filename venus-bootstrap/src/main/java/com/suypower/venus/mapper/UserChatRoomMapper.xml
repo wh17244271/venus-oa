@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.suypower.venus.dao.UserChatRoomDao">
+
+    <resultMap id="chatListMap" type="com.suypower.venus.entity.ChatList">
+
+
+        <collection property="member" ofType="com.suypower.venus.entity.User"
+                    select="getRoomMember" column="{owerId=owerId,userId=userId,roomType=roomType,roomId=roomId}"/>
+
+        <collection property="lastMessage" ofType="com.suypower.venus.entity.ChatMessage"
+                    select="getLastLMessage" column="{roomId=roomId,userId=userId,loginUserId=loginUserId}"/>
+
+    </resultMap>
+
+    <!--    获取聊天列表-->
+    <select id="getChatList" resultMap="chatListMap">
+        SELECT
+        ucr.ur_id as  uRoomId,
+        ucr.u_id owerId,
+        cr.u_id userId,
+        cr.room_id as roomId,
+        cr.room_type as roomType,
+        cr.room_name as roomName,
+        ucr.top_status as top,
+        ucr.new_msg_count AS newMsgCount,
+        #{userId} as loginUserId
+        FROM
+
+        chat_user_room ucr
+        JOIN chat_room cr
+        on ucr.room_id = cr.room_id
+        WHERE
+        ucr.u_id = #{userId}
+        and ucr.left_del_status = 0
+        ORDER BY ucr.top_status DESC,update_time DESC
+    </select>
+
+    <!--    获取聊天室里的成员  需要参数  roomType userId -->
+    <select id="getRoomMember" resultType="com.suypower.venus.entity.User">
+        select
+        u_id userId,
+        username username,
+        nickname nickname,
+        initial initial,
+        headerUrl headerUrl,
+        telphone telphone,
+        signature signature,
+        sex,
+        type,
+        homeUrl,
+        (
+
+
+        SELECT
+        CASE
+        WHEN remark IS NULL || remark = '' THEN
+        nickname
+        ELSE
+        remark
+        END 'remark'
+        FROM
+        (
+        SELECT
+        u.nickname AS nickname,
+        (
+        SELECT
+        f.f_remark AS NAME
+        FROM
+        chat_friend f
+        WHERE
+        f.u_id = #{userId}
+        AND f.f_status = '1'
+        AND f.u_fid = u.u_id
+        ) AS remark
+        FROM
+        chat_user u
+        WHERE
+        u.u_id = userId
+        ) info
+
+
+        )remark
+        from chat_user
+        <where>
+            u_id in (
+            SELECT u_id FROM chat_user_room
+            <where>
+                room_id = #{roomId}
+                AND( kickout_status is null
+                OR kickout_status = 0)
+                <if test=" roomType != 'group' ">
+                    and u_id != #{owerId}
+                </if>
+            </where>
+            )
+        </where>
+
+
+    </select>
+    <!--查找最后一条聊天记录-->
+    <select id="getLastLMessage" resultType="com.suypower.venus.entity.ChatMessage">
+        SELECT
+        msg_from_uid as fUserId,
+        msg_type as msgType,
+        msg_content as msg,
+        msg_time as 'time',
+        (
+        SELECT
+        CASE
+        WHEN remark IS NULL || remark = '' THEN
+        nickname
+        ELSE
+        remark
+        END 'remark'
+        FROM
+        (
+        SELECT
+        u.nickname AS nickname,
+        (
+        SELECT
+        f.f_remark AS NAME
+        FROM
+        chat_friend f
+        WHERE
+        f.u_id = #{loginUserId}
+        AND f.f_status = '1'
+        AND f.u_fid = u.u_id
+        ) AS remark
+        FROM
+        chat_user u
+        WHERE
+        u.u_id = fUserId
+        ) info
+        ) userRemark
+
+        from chat_msg
+        <where>
+            room_id =#{roomId}
+            and ( (msg_type='sys' AND msg_from_uid = #{loginUserId}) or  msg_type != 'sys' )
+            AND msg_id not in (
+            SELECT msg_id from chat_msg_proce WHERE msg_id = msg_id
+            AND u_id = #{loginUserId}
+            )
+        </where>
+        ORDER BY msg_time desc
+        LIMIT 1
+    </select>
+
+    <resultMap id="chatMap" type="com.suypower.venus.entity.ChatMessage">
+        <collection property="user" ofType="com.suypower.venus.entity.User"
+                    select="getUserByUserId" column="{userId=fUserId,loginUserId=loginUserId}"/>
+    </resultMap>
+<!--    通过内容搜索聊天记录-->
+    <select id="searchChatContent" resultMap="chatMap">
+        SELECT
+         msg_id as id,
+        msg_from_uid as fUserId,
+        msg_type as msgType,
+        msg_content as msg,
+        msg_time as 'time',
+        #{loginUserId} as loginUserId
+        from chat_msg msg
+        where room_id = #{roomId}
+        AND not EXISTS
+        (
+        SELECT 1 from chat_msg_proce p where p.msg_id = msg.msg_id
+        )
+        AND msg_content like concat('%',#{content},'%')
+        AND msg_type = #{msgType}
+        ORDER BY msg_time DESC
+
+    </select>
+    <!--获取用户信息-->
+    <select id="getUserByUserId" resultType="com.suypower.venus.entity.User">
+        select
+        u_id userId,
+        headerUrl headerUrl,
+        (
+        SELECT
+        CASE
+        WHEN remark IS NULL || remark = '' THEN
+        nickname
+        ELSE
+        remark
+        END 'remark'
+        FROM
+        (
+        SELECT
+        u.nickname AS nickname,
+        (
+        SELECT
+        f.f_remark AS NAME
+        FROM
+        chat_friend f
+        WHERE
+        f.u_id = #{loginUserId}
+        AND f.f_status = '1'
+        AND f.u_fid = u.u_id
+        ) AS remark
+        FROM
+        chat_user u
+        WHERE
+        u.u_id = userId
+        ) info
+        ) remark
+        from chat_user
+        <where>
+            u_id = #{userId}
+        </where>
+    </select>
+
+    <!--通过房间id查找房间信息-->
+    <select id="getChatRoomInfoByRoomId" resultType="com.suypower.venus.entity.ChatRoom">
+        SELECT
+         room_id AS  roomId,
+        room_type AS roomType,
+        room_name AS roomName,
+        u_id as ownerId
+        from chat_room
+        WHERE
+        room_id = #{roomId}
+        AND room_status = 1
+    </select>
+    <!--  查找聊天室所有成员  -->
+    <select id="getUserListByRoomId" resultType="com.suypower.venus.entity.User">
+        SELECT
+	usr.u_id userId,
+	usr.username username,
+	usr.headerUrl headerUrl,
+	(
+		SELECT
+			CASE
+		WHEN remark IS NULL || remark = '' THEN
+			nickname
+		ELSE
+			remark
+		END 'remark'
+		FROM
+			(
+				SELECT
+					u.nickname AS nickname,
+					(
+						SELECT
+							f.f_remark AS NAME
+						FROM
+							chat_friend f
+						WHERE
+							f.u_id = #{userId}
+						AND f.f_status = '1'
+						AND f.u_fid = u.u_id
+					) AS remark
+				FROM
+					chat_user u
+				WHERE
+					u.u_id = userId
+			) info
+	) remark
+FROM
+	chat_user usr
+WHERE
+	usr.u_id IN (
+		SELECT
+			u_id
+		FROM
+			chat_user_room room
+		WHERE
+			room_id = #{roomId}
+	)
+    </select>
+
+    <sql id="ucrBase">
+         ur_id as uRoomId,
+        u_id as userId,
+        room_id as roomId,
+        top_status as top,
+        left_del_status as isLeftDel,
+        kickout_status as isKickOut,
+        active_status as isActive,
+        new_msg_count as newMsgCount
+    </sql>
+    <!--通过用户id和roomId查找用户聊天室信息-->
+    <select id="getUserChatRoomByUserIdAndRoomId" resultType="com.suypower.venus.entity.UserChatRoom">
+        SELECT
+        <include refid="ucrBase"/>
+        FROM
+        chat_user_room
+        <where>
+            AND u_id = #{userId}
+            and room_id = #{roomId}
+
+        </where>
+
+    </select>
+    <!--    通过用户id获取所有用户聊天室-->
+    <select id="getUserChatRoomList" resultType="com.suypower.venus.entity.UserChatRoom">
+        SELECT
+        <include refid="ucrBase"/>
+        FROM
+        chat_user_room
+        <where>
+            AND u_id = #{userId}
+        </where>
+    </select>
+
+    <!--编辑用户聊天室更新时间-->
+    <update id="editChatRoomUpdateTime">
+        UPDATE chat_user_room
+        <set>
+            update_time = now()
+        </set>
+        WHERE u_id = #{userId}
+        and room_id = #{roomId}
+
+    </update>
+
+    <!--    编辑聊天室名字-->
+    <update id="editChatRoomName">
+        UPDATE chat_room
+        <set>
+            room_name = #{roomName}
+        </set>
+        WHERE room_id = #{roomId}
+    </update>
+    <!--    编辑用户聊天室置顶状态-->
+    <update id="editTopStatus">
+        UPDATE chat_user_room
+        <set>
+            top_status = #{topStatus}
+        </set>
+        WHERE u_id = #{userId}
+        and room_id = #{roomId}
+    </update>
+    <!--    编辑用户聊天室左滑删除状态-->
+    <update id="editLeftDelStatus">
+        UPDATE chat_user_room
+        <set>
+            left_del_status = #{leftDelStatus}
+        </set>
+        WHERE u_id = #{userId}
+        and room_id = #{roomId}
+    </update>
+    <!--    编辑用户聊天室窗口激活状态-->
+    <update id="editActiveStatus">
+        UPDATE chat_user_room
+        <set>
+            active_status = #{activeStatus}
+        </set>
+        WHERE u_id = #{userId}
+        and room_id = #{roomId}
+    </update>
+    <!--更新消息条数-->
+    <update id="editNewMsgCount">
+        update chat_user_room
+        <set>
+            new_msg_count = #{newMsgCount}
+        </set>
+        where u_id = #{userId}
+        and room_id = #{roomId}
+    </update>
+    <!--    更新用户踢出状态-->
+    <update id="editkickoutStatus">
+        UPDATE chat_user_room
+        <set>
+            kickout_status = #{kickoutStatus}
+        </set>
+        WHERE u_id = #{userId}
+        and room_id = #{roomId}
+    </update>
+    <!--    判断两个用户是否存在私人聊天室-->
+    <select id="judgeRoomIsExist" resultType="com.suypower.venus.entity.ChatRoom">
+       SELECT room_id as roomId  FROM
+        chat_user_room WHERE
+        u_id = #{oneUId} AND room_id in(
+        SELECT room_id FROM chat_user_room
+        WHERE u_id =#{otherUId}
+        AND room_id in(
+        SELECT room_id FROM chat_room
+        WHERE room_type = #{roomType}
+        )
+        )
+    </select>
+    <!--创建聊天室ChatRoom-->
+    <insert id="creatChatRoom" keyProperty="roomId" useGeneratedKeys="true"
+            parameterType="com.suypower.venus.entity.ChatRoom">
+        insert into chat_room
+        (room_type,room_name,u_id,room_status,room_creattime)values (
+        #{roomType},#{roomName},#{ownerId},'1',now()
+        )
+    </insert>
+    <!--    创建用户聊天室-->
+    <insert id="creatUserChatRoom">
+        insert into chat_user_room
+        (
+            u_id,room_id,left_del_status
+        )VALUES(
+            #{userId},#{roomId},#{isLeftDel}
+        )
+    </insert>
+
+    <!--获取聊天室中被踢出的用户-->
+    <select id="getUserIdIsKicked" resultType="java.lang.String">
+        SELECT u_id AS uId
+        FROM chat_user_room WHERE room_id = #{roomId}
+        AND kickout_status = 1
+    </select>
+    <!--    删除用户聊天室-->
+    <delete id="delUserChatRoom">
+        DELETE FROM chat_user_room
+        WHERE
+        u_id = #{userId}
+        AND room_id = #{roomId}
+    </delete>
+
+</mapper>

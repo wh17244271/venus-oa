@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.suypower.venus.dao.UserDao">
+    <sql id="baseClo">
+         u_id userId,
+        username username,
+        nickname nickname,
+        initial initial,
+        headerUrl headerUrl,
+        telphone telphone,
+        signature signature,
+        sex,
+        type,
+        homeUrl
+    </sql>
+    <!--获取用户信息-->
+    <select id="getUserInfo" resultType="com.suypower.venus.entity.User">
+        select
+        <include refid="baseClo"/>
+        from chat_user
+        <where>
+            <if test="userId != null and userId != ''">
+                and u_id = #{userId}
+            </if>
+            <if test="username!= null and username != ''">
+                and username = #{username}
+            </if>
+        </where>
+    </select>
+
+    <!--获取用户信息-->
+    <select id="getUserByUserId" resultType="com.suypower.venus.entity.User">
+        select
+        <include refid="baseClo"/>
+        from chat_user
+        <where>
+            u_id = #{userId}
+        </where>
+    </select>
+
+    <!--获取用户密码-->
+    <select id="getUserPassword" resultType="java.lang.String">
+        select PASSWORD password
+        from chat_user
+        <where>
+            <if test="userId != null and userId != ''">
+                and u_id = #{userId}
+            </if>
+            <if test="username!= null and username != ''">
+                and username = #{username}
+            </if>
+        </where>
+    </select>
+
+
+    <!--查找用户所有列表，除去自己-->
+    <select id="getUserListExcUserId" resultType="com.suypower.venus.entity.User">
+        select
+        <include refid="baseClo"/>
+        from chat_user
+        <where>
+            u_id != #{userId}
+            and status = '1'
+        </where>
+    </select>
+    <!--    更新用户信息-->
+    <update id="editUserInfo">
+        update chat_user
+        <set>
+            <if test="nickname!=null and nickname!=''">
+                nickname = #{nickname},
+            </if>
+            <if test="headerUrl!=null and headerUrl!=''">
+                headerUrl = #{headerUrl},
+            </if>
+        </set>
+        <where>
+            u_id = #{userId}
+        </where>
+    </update>
+
+</mapper>

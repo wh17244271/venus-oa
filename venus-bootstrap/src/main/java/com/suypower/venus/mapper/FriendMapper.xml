@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.suypower.venus.dao.FriendDao">
+    <sql id="userBase">
+         u_id userId,
+        username username,
+        nickname nickname,
+        initial initial,
+        headerUrl headerUrl,
+        telphone telphone,
+        signature signature,
+        sex,
+        type,
+        homeUrl
+    </sql>
+
+    <resultMap id="friendMap" type="com.suypower.venus.entity.Friend">
+        <result column="f_id" property="friendId"/>
+        <result column="f_remark" property="friendRemark"/>
+
+        <collection property="user" ofType="com.suypower.venus.entity.User"
+                    select="getUserByUserId" column="{userId=myFriendUId}"/>
+
+    </resultMap>
+    <!--    获取用户当前非朋友列表-->
+    <select id="getNotFriendList" resultType="com.suypower.venus.entity.User">
+        SELECT
+        <include refid="userBase"/>
+        from
+        chat_user usr
+        WHERE usr.u_id
+        NOT IN
+        (
+
+        SELECT u_fid from chat_friend
+        WHERE u_id =#{userId}
+        )
+        AND usr.u_id != #{userId}
+    </select>
+
+    <!--获取用户的所有朋友信息-->
+    <select id="getFriendList" resultMap="friendMap">
+        <if test="searchInfo !=null and searchInfo!='' ">
+            SELECT f_id,f_remark,myFriendUId from (
+        </if>
+        select f_id,f_remark,u_fid as myFriendUId
+        from chat_friend
+        <where>
+            u_id = #{userId}
+        </where>
+        <if test="searchInfo !=null and searchInfo!='' ">
+            ) myfri
+            WHERE
+            f_remark like  CONCAT('%', #{searchInfo},'%')
+            OR myFriendUId in
+            (
+            SELECT u_id from chat_user
+            where nickname like  CONCAT('%', #{searchInfo},'%')
+            AND u_id = myFriendUId
+            )
+        </if>
+    </select>
+
+    <!--   获取朋友信息 -->
+    <select id="getFriend" resultMap="friendMap">
+
+        select f_id,f_remark,u_fid as myFriendUId
+        from chat_friend
+        <where>
+            u_id = #{userId}
+            and u_fid = #{fUserId}
+        </where>
+    </select>
+
+
+    <!--获取用户信息-->
+    <select id="getUserByUserId" resultType="com.suypower.venus.entity.User">
+        select
+        <include refid="userBase"/>
+        from chat_user
+        <where>
+            u_id = #{userId}
+        </where>
+    </select>
+
+    <update id="editFriendRemark">
+        UPDATE chat_friend
+        <set>
+            f_remark = #{friendRemark}
+        </set>
+        <where>
+            u_id = #{userId}
+            AND u_fid = #{fUId}
+        </where>
+
+    </update>
+    <!--更改好友申请状态为已同意-->
+    <update id="editMakeFriendMsgStatus">
+        update chat_sys_msg
+        <set>
+            smsg_status = #{status}
+        </set>
+        where smsg_id = #{sysMsgId}
+    </update>
+
+
+    <resultMap id="makeFriendMsgMap" type="com.suypower.venus.entity.ChatSysMsg">
+
+        <collection property="sender" ofType="com.suypower.venus.entity.User"
+                    select="getUserByUserId" column="{userId=sender}"/>
+
+        <!-- <collection property="rcpt" ofType="com.suypower.venus.entity.User"
+                     select="getUserByUserId" column="{userId=rcpt}"/>-->
+
+    </resultMap>
+    <!--    获取添加好友信息列表-->
+    <select id="getMakeFriendMsgList" resultMap="makeFriendMsgMap">
+        select
+        smsg_id as  sysMsgId,
+        smsg_sender as sender,
+        smsg_rcpt as  rcpt,
+        smsg_type as type,
+        smsg_content as content,
+        smsg_time as time,
+        smsg_status as status
+        from chat_sys_msg
+         WHERE smsg_rcpt= #{userId}
+        AND smsg_type = 'add_friend'
+        ORDER BY smsg_time DESC
+    </select>
+    <!--    判断是否有好友申请-->
+    <select id="judgeFriendApply" resultType="java.lang.String">
+        select
+       smsg_id as  sysMsgId
+        from chat_sys_msg
+         WHERE smsg_rcpt=#{rcpt}
+				AND smsg_sender = #{sender}
+        AND smsg_type = 'add_friend'
+        and smsg_status = '1'
+
+    </select>
+
+    <!--更改好友申请时间为最新时间-->
+    <update id="editMakeFriendMsgTime">
+        update chat_sys_msg
+        <set>
+            smsg_time = now()
+        </set>
+        where smsg_id = #{sysMsgId}
+    </update>
+    <!--    添加好友申请-->
+    <insert id="addMakeFriendMsg">
+        insert into chat_sys_msg
+        (smsg_sender,smsg_rcpt,smsg_type,smsg_content,smsg_time,smsg_status)
+        values
+        (#{sender},#{rcpt},'add_friend',#{content},now(),'1')
+    </insert>
+    <!--    添加好友-->
+    <insert id="addFriend">
+        insert into chat_friend
+        (u_id,u_fid,f_remark,f_status)
+        values
+        (#{userId},#{fUserId},#{remark},'1')
+    </insert>
+
+
+</mapper>

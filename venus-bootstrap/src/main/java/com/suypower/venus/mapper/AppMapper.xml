@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.suypower.venus.dao.AppDao">
+    <resultMap id="workGroupMap" type="com.suypower.venus.entity.AppGroup">
+        <collection property="apps"  select="getWorkAppList" column="{groupId=groupId}"/>
+    </resultMap>
+<!--    获取app所有分组-->
+    <select id="getWorkGroupList" resultMap="workGroupMap">
+        SELECT
+         g_id as groupId,
+         g_no as groupName,
+         g_name as groupTitle,
+         g_desc as groupDesc
+         FROM
+        work_group
+        WHERE
+        g_status = '1'
+        ORDER BY g_weight
+    </select>
+    <select id="getWorkAppList" resultType="com.suypower.venus.entity.App">
+        SELECT
+        app_id as appId,
+        app_no as name,
+        app_name as title,
+        app_style as style,
+        app_ico as ico,
+        app_unread as unread,
+        app_status_display as display,
+        app_status_click as click,
+        app_desc as appDesc
+         FROM
+        work_app
+        WHERE
+        g_id = #{groupId}
+        and app_status = '1'
+        ORDER BY app_weight
+    </select>
+</mapper>

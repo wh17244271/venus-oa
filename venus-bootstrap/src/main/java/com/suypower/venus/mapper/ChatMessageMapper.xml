@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.suypower.venus.dao.ChatMessageDao">
+
+
+    <!--    查找房间的所有没有删除的聊天信息-->
+    <select id="getChatMessageListByUserNotDel" resultType="com.suypower.venus.entity.ChatMessage">
+
+        SELECT
+        msg_id AS id,
+        room_id AS roomId,
+        msg_content AS msg,
+        msg_type AS msgType,
+        msg_from_uid AS 'from',
+        msg_to_uid AS 'to',
+        msg_time AS time
+         FROM
+        chat_msg msg
+        WHERE room_id = #{roomId}
+        and ( (msg_type='sys' AND msg_from_uid = #{userId}) or  msg_type != 'sys' )
+        AND msg_id not in(
+            SELECT msg_id from chat_msg_proce del
+            WHERE u_id = #{userId}
+        )
+        ORDER BY msg_time desc
+    </select>
+
+    <insert id="addNewChatMessage" keyProperty="id" useGeneratedKeys="true"
+            parameterType="com.suypower.venus.entity.ChatMessage">
+        insert into chat_msg
+        (room_id,msg_content,msg_type,msg_from_uid,msg_to_uid,msg_time)values (
+            #{roomId}, #{msg}, #{msgType}, #{from}, #{to},REPLACE(unix_timestamp(current_timestamp(3)),'.','')
+        )
+
+    </insert>
+
+    <!--    撤回消息-->
+    <delete id="withdrawMessage">
+        DELETE from chat_msg
+        WHERE msg_id =#{msgId}
+        AND
+        msg_time >
+        REPLACE(unix_timestamp(current_timestamp(3)),'.','')- #{overtime}
+
+    </delete>
+
+
+    <!--    先清空聊天室的所有数据-->
+    <delete id="clearChatRoomMsg">
+        DELETE
+        FROM
+            chat_msg_proce
+        WHERE
+            u_id = #{userId}
+        AND room_id = #{roomId}
+    </delete>
+
+    <!--删除用户聊天室聊天记录-->
+    <insert id="delUserChatRoomMsg">
+        INSERT INTO chat_msg_proce (msg_id, u_id,room_id, del_time)
+        SELECT
+            msg_id,
+            #{userId},
+            #{roomId},
+            now()
+        FROM
+            chat_msg
+        WHERE
+            room_id = #{roomId}
+    </insert>
+    <insert id="delChatMessage">
+         INSERT INTO chat_msg_proce (msg_id, u_id,room_id, del_time)
+         values (#{msgId},#{userId},#{roomId},now())
+    </insert>
+</mapper>
